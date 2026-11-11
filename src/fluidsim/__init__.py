@@ -23,7 +23,7 @@ def main() -> None:
                 run = False
 
         if True: # Simulating
-            for i in range(10):
+            for i in range(100):
                 grid.solve_pressure()
 
         if True: # Drawing
