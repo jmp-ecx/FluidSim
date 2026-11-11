@@ -11,8 +11,10 @@ min_flow = -1
 
 class Grid:
     CellSize = 1
-    Width  = 48
-    Height = 32
+    # Width  = 48
+    # Height = 32
+    Width = 10
+    Height = 5
     FluidDensity = 1
 
     def __init__(self, width: int, height: int, timestep: float) -> None:
@@ -20,10 +22,10 @@ class Grid:
         self.height = height
         self.timestep = timestep
 
-        self.x_edges = [[random.uniform(min_flow, max_flow) for _ in range(width + 1)] for _ in range(width)]
+        self.x_edges = [[random.uniform(min_flow, max_flow) for _ in range(width + 1)] for _ in range(height)]
         self.y_edges = [[random.uniform(min_flow, max_flow) for _ in range(width)] for _ in range(height + 1)]
 
-        self.grid_props = [[(i*4, 0, j*5) for i in range(width)] for j in range(height)]
+        # self.grid_props = [[(i*4, 0, j*5) for i in range(width)] for j in range(height)]
         self.grid_pressure = [[0.0 for i in range(width)] for j in range(height)]
 
     def cell_divergence(self, x: int, y: int) -> float:
@@ -71,7 +73,21 @@ class Grid:
             for x in range(self.width):
                 self.solve_cell_pressure(x, y)
 
-    @cache
+    def update_velocity(self) -> None:
+        K = self.timestep / (Grid.FluidDensity * Grid.CellSize)
+
+        for y in range(len(self.x_edges)):
+            for x in range(len(self.x_edges[y])):
+                pr = self.get_pressure(x,y)
+                pl = self.get_pressure(x-1, y)
+                self.x_edges[y][x] -= K * (pr - pl)
+
+        for y in range(len(self.y_edges)):
+            for x in range(len(self.y_edges[y])):
+                pt = self.get_pressure(x,y-1)
+                pb = self.get_pressure(x, y)
+                self.y_edges[y][x] -= K * (pt - pb)
+
     def min_and_max_cell_divergence(self) -> tuple[float, float]:
         cur_min = 0
         cur_max = 0

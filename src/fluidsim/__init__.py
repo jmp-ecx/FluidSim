@@ -2,7 +2,8 @@ from simulator import *
 
 import pygame as pg
 
-GRID_TILE_SIZE = 24
+# GRID_TILE_SIZE = 24
+GRID_TILE_SIZE = 64
 STEPS_PER_SECOND = 5 # TODO - change
 TIMESTEP = 1 / STEPS_PER_SECOND
 
@@ -23,8 +24,9 @@ def main() -> None:
                 run = False
 
         if True: # Simulating
-            for i in range(100):
+            for i in range(5):
                 grid.solve_pressure()
+            grid.update_velocity()
 
         if True: # Drawing
             win.fill((0xff, 0xff, 0xff))
@@ -40,14 +42,13 @@ def main() -> None:
                     #              [*offset, GRID_TILE_SIZE, GRID_TILE_SIZE], 0)
 
                     # d = grid.cell_divergence(x, y)
-                    #
                     # if d == 0:  col = (0, 0, 0)
                     # elif d > 0: col = (0, 0, int(255 * (d/mx)))
                     # else:       col = (0, int(255 * (d/mi)), 0)
 
                     p = grid.grid_pressure[y][x]
                     if p == 0:  col = (0, 0, 0)
-                    elif p > 0: col = (0, 0, int(255 * (p/px)))
+                    elif p > 0: col = (int(255 * (p/px)), 0, 0)
                     else:       col = (0, int(255 * (p/pi)), 0)
 
                     pg.draw.rect(win, col,
