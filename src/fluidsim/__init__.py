@@ -2,20 +2,19 @@ from simulator import *
 
 import pygame as pg
 
-# GRID_TILE_SIZE = 24
-GRID_TILE_SIZE = 64
 STEPS_PER_SECOND = 5 # TODO - change
 TIMESTEP = 1 / STEPS_PER_SECOND
 
 def main() -> None:
     pg.init()
 
-    win = pg.display.set_mode((Grid.Width * GRID_TILE_SIZE, Grid.Height * GRID_TILE_SIZE))
+    win = pg.display.set_mode((Grid.Width * Grid.CellSize, Grid.Height * Grid.CellSize))
     pg.display.set_caption('Fluid Simulator')
     clock = pg.time.Clock()
 
-    grid = Grid(Grid.Width, Grid.Height, TIMESTEP)
+    grid = Grid(Grid.Width, Grid.Height, TIMESTEP, 100)
 
+    has = False
     run = True
     while run:
         _ = clock.tick(STEPS_PER_SECOND) # Gives dt, if needed
@@ -24,8 +23,7 @@ def main() -> None:
                 run = False
 
         if True: # Simulating
-            for i in range(5):
-                grid.solve_pressure()
+            grid.solve_pressure()
             grid.update_velocity()
 
         if True: # Drawing
@@ -36,26 +34,40 @@ def main() -> None:
             pi, px = grid.min_max_pressure()
             for y in range(Grid.Height):
                 for x in range(Grid.Width):
-                    offset = x*GRID_TILE_SIZE,y*GRID_TILE_SIZE
+                    offset = x*Grid.CellSize,y*Grid.CellSize
 
                     # pg.draw.rect(win, grid.grid_props[y][x],
                     #              [*offset, GRID_TILE_SIZE, GRID_TILE_SIZE], 0)
 
-                    # d = grid.cell_divergence(x, y)
-                    # if d == 0:  col = (0, 0, 0)
-                    # elif d > 0: col = (0, 0, int(255 * (d/mx)))
-                    # else:       col = (0, int(255 * (d/mi)), 0)
+                    d = grid.cell_divergence(x, y)
+                    if d == 0:  col = (0, 0, 0)
+                    elif d > 0: col = (0, 0, int(255 * (d/mx)))
+                    else:       col = (0, int(255 * (d/mi)), 0)
 
-                    p = grid.grid_pressure[y][x]
-                    if p == 0:  col = (0, 0, 0)
-                    elif p > 0: col = (int(255 * (p/px)), 0, 0)
-                    else:       col = (0, int(255 * (p/pi)), 0)
+                    # p = grid.grid_pressure[y][x]
+                    # if p == 0:  col = (0, 0, 0)
+                    # elif p > 0: col = (int(255 * (p/px)), 0, 0)
+                    # else:       col = (0, int(255 * (p/pi)), 0)
 
                     pg.draw.rect(win, col,
-                                 [*offset, GRID_TILE_SIZE, GRID_TILE_SIZE], 0)
+                                 [*offset, Grid.CellSize, Grid.CellSize], 0)
                     i += 1
                 i += 1
 
             pg.display.update()
 
     pg.quit()
+
+def main_() -> None:
+    grid = Grid(Grid.Width, Grid.Height, 1/5, 1)
+
+    while True:
+        grid.solve_pressure()
+        grid.update_velocity()
+        g = grid.grid_pressure
+        for i in g:
+            print(i)
+        i = input()
+        if i == 'q': break
+        print('========')
+
