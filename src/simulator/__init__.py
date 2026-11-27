@@ -1,121 +1,135 @@
 from __future__ import annotations
-import random
-from functools import cache
+import random, math
 
 __all__ = [
-    'Grid', 'max_flow', 'min_flow'
+    'Grid',
 ]
 
-max_flow = 1
-min_flow = -1
+def clamp(a: float, val: float, b: float) -> float:
+    if val < a: return a
+    if val > b: return b
+    return val
+def clamp_i(a: int, val: int, b: int) -> int:
+    if val < a: return a
+    if val > b: return b
+    return val
 
 class Grid:
-    CellSize = 16
-    Width  = 64
-    Height = 48
-    # Width = 10
-    # Height = 5
-    FluidDensity = 1
+    CELL_SIZE = 16
+    FLUID_DENSITY = 1.0
 
-    def __init__(self, width: int, height: int, timestep: float, number_iterations: int) -> None:
-        self.width  = width
+    def __init__(self, width: int, height: int, timestep: float) -> None:
+        self.width = width
         self.height = height
         self.timestep = timestep
-        self.n_its = number_iterations
 
-        self.x_edges = [[random.uniform(min_flow, max_flow) for _ in range(width + 1)] for _ in range(height)]
-        self.y_edges = [[random.uniform(min_flow, max_flow) for _ in range(width)] for _ in range(height + 1)]
+        self.v_x = [[random.uniform(-1, 1) for _ in range(width + 1)] for _ in range(height)]
+        self.v_y = [[random.uniform(-1, 1) for _ in range(width)] for _ in range(height + 1)]
 
-        # self.grid_props = [[(i*4, 0, j*5) for i in range(width)] for j in range(height)]
-        self.grid_props = [[0 for _ in range(width)] for _ in range(height)]
-        self.grid_pressure = [[0.0 for _ in range(width)] for _ in range(height)]
+        self.pressure = [[0.0 for _ in range(width)] for _ in range(height)]
 
-        for i in range(width):
-            self.grid_props[0][i] |= 0b00000001
-            self.grid_props[height-1][i] |= 0b00000001
+        self.solid_cells = [[0 for _ in range(width)] for _ in range(height)]
+        for x in range(width):
+            self.solid_cells[0][x] = 1
+            self.solid_cells[height-1][x] = 1
+        for y in range(height):
+            self.solid_cells[y][0] = 1
+            self.solid_cells[y][width-1] = 1
+
+        for j in range(height+1):
+            for i in range(width):
+                self.v_y[j][i] = 0.0
         for j in range(height):
-            self.grid_props[j][0] |= 0b00000001
-            self.grid_props[j][width-1] |= 0b00000001
+            for i in range(width+1):
+                self.v_x[j][i] = 1.0
 
-    def is_solid(self, x: int, y: int) -> bool:
-        try: return bool(self.grid_props[y][x] & 0b00000001)
-        except IndexError: return True
+    def is_solid(self, x: int, y: int) -> int:
+        return self.solid_cells[clamp_i(0, y, self.height-1)][clamp_i(0, x, self.width-1)]
 
-    def cell_divergence(self, x: int, y: int) -> float:
-        v_top    = self.y_edges[y][x]
-        v_bottom = self.y_edges[y + 1][x]
-        v_left   = self.x_edges[y][x]
-        v_right  = self.x_edges[y][x + 1]
+    def divergence(self, x: int, y: int) -> float:
+        vt = self.v_y[y+0][x]
+        vb = self.v_y[y+1][x]
+        vl = self.v_x[y][x+0]
+        vr = self.v_x[y][x+1]
 
-        gradient_x = (v_right - v_left) / float(Grid.CellSize)
-        gradient_y = (v_top - v_bottom) / float(Grid.CellSize)
+        dx = (vr - vl) / float(Grid.CELL_SIZE)
+        dy = (vt - vb) / float(Grid.CELL_SIZE)
 
-        return gradient_x + gradient_y
+        return dy + dx
 
-    def min_max_pressure(self) -> tuple[float, float]:
-        cur_min = 0
-        cur_max = 0
+    def divergence_bounds(self) -> tuple[float, float]:
+        mx = 0.0
+        mi = 0.0
         for j in range(self.height):
             for i in range(self.width):
-                p = self.get_pressure(i, j)
-                if p < cur_min: cur_min = p
-                elif p > cur_max: cur_max = p
-
-        return cur_min, cur_max
+                p = self.divergence(i, j)
+                if p < mi: mi = p
+                elif p > mx: mx = p
+        return mx, mi
 
     def get_pressure(self, x: int, y: int) -> float:
-        out_of_bounds = x < 0 or x > self.width-1 or y < 0 or y > self.height-1
-        return 0.0 if out_of_bounds else self.grid_pressure[y][x]
+        out_of_bounds = not ((0 < x < self.width-1) and (0 < y < self.height-1))
+        return 0.0 if out_of_bounds else self.pressure[y][x]
 
     def solve_cell_pressure(self, x: int, y: int) -> None:
-        p_top    = self.get_pressure(x, y - 1)
-        p_bottom = self.get_pressure(x, y + 1)
-        p_left   = self.get_pressure(x - 1, y)
-        p_right  = self.get_pressure(x + 1, y)
+        ft = 0.0 if self.is_solid(x, y-1) else 1.0
+        fb = 0.0 if self.is_solid(x, y+1) else 1.0
+        fl = 0.0 if self.is_solid(x-1, y) else 1.0
+        fr = 0.0 if self.is_solid(x+1, y) else 1.0
+        flow_edges = ft + fb + fl + fr
 
-        v_top    = self.y_edges[y][x]
-        v_bottom = self.y_edges[y + 1][x]
-        v_left   = self.x_edges[y][x]
-        v_right  = self.x_edges[y][x + 1]
+        if self.is_solid(x, y) or flow_edges == 0.0:
+            self.pressure[y][x] = 0.0
+            return
 
-        p_sum = p_top + p_bottom + p_left + p_right
-        v_sum = v_top + v_bottom + v_left + v_right
-        self.grid_pressure[y][x] = (p_sum - Grid.FluidDensity * Grid.CellSize * v_sum / self.timestep) / 4.0
+        pt = self.get_pressure(x+0, y-1) * ft
+        pb = self.get_pressure(x+0, y+1) * fb
+        pl = self.get_pressure(x-1, y+0) * fl
+        pr = self.get_pressure(x+1, y+0) * fr
+
+        vt = self.v_y[y+0][x] * ft
+        vb = self.v_y[y+1][x] * fb
+        vl = self.v_x[y][x+0] * fl
+        vr = self.v_x[y][x+1] * fr
+
+        p = pt + pb + pl + pr
+        v = vt - vb + vr - vl
+        self.pressure[y][x] = (p - Grid.FLUID_DENSITY * Grid.CELL_SIZE * v / self.timestep) / flow_edges
 
     def solve_pressure(self) -> None:
-        for i in range(self.n_its):
+        for _ in range(10):
             for y in range(self.height):
                 for x in range(self.width):
                     self.solve_cell_pressure(x, y)
 
-    def update_velocity(self) -> None:
-        K = self.timestep / (Grid.FluidDensity * Grid.CellSize)
+    def pressure_bounds(self) -> tuple[float, float]:
+        mx = 0.0
+        mi = 0.0
+        for j in range(self.height):
+            for i in range(self.width):
+                p = self.get_pressure(i, j)
+                if p < mi: mi = p
+                elif p > mx: mx = p
+        return mx, mi
 
-        for y in range(len(self.x_edges)):
-            for x in range(len(self.x_edges[y])):
-                if self.is_solid(x, y) or self.is_solid(x-1, y):
-                    self.x_edges[y][x] = 0
+    def solve_velocity(self) -> None:
+        k = self.timestep / (Grid.FLUID_DENSITY * Grid.CELL_SIZE)
+        for y in range(len(self.v_x)):
+            for x in range(len(self.v_x[y])):
+                if self.is_solid(x, y) or self.is_solid(x-1, 0):
+                    self.v_x[y][x] = 0.0
+                    continue
 
-                pr = self.get_pressure(x,y)
                 pl = self.get_pressure(x-1, y)
-                self.x_edges[y][x] -= K * (pr - pl)
+                pr = self.get_pressure(x, y)
+                self.v_x[y][x] -= k * (pr - pl)
 
-        for y in range(len(self.y_edges)):
-            for x in range(len(self.y_edges[y])):
-                if self.is_solid(x, y) or self.is_solid(x, y-1):
-                    self.y_edges[y][x] = 0
+        for y in range(len(self.v_y)):
+            for x in range(len(self.v_y[y])):
+                if self.is_solid(x, y) or self.is_solid(x, y - 1):
+                    self.v_y[y][x] = 0.0
+                    continue
 
                 pt = self.get_pressure(x, y-1)
                 pb = self.get_pressure(x, y)
-                self.y_edges[y][x] -= K * (pt - pb)
-
-    def min_and_max_cell_divergence(self) -> tuple[float, float]:
-        cur_min = 0
-        cur_max = 0
-        for j in range(self.height):
-            for i in range(self.width):
-                d = self.cell_divergence(i, j)
-                if d < cur_min: cur_min = d
-                elif d > cur_max: cur_max = d
-
-        return cur_min, cur_max
+                self.v_y[y][x] -= k * (pt - pb)
