@@ -1,26 +1,20 @@
 from __future__ import annotations
-import random, math
+import random
+
+from simulator.math import *
 
 __all__ = [
     'Grid',
 ]
 
-def clamp(a: float, val: float, b: float) -> float:
-    if val < a: return a
-    if val > b: return b
-    return val
-def clamp_i(a: int, val: int, b: int) -> int:
-    if val < a: return a
-    if val > b: return b
-    return val
 
 class Grid:
-    CELL_SIZE = 16
     FLUID_DENSITY = 1.0
 
-    def __init__(self, width: int, height: int, timestep: float) -> None:
+    def __init__(self, width: int, height: int, cell_size: int, timestep: float) -> None:
         self.width = width
         self.height = height
+        self.cell_size = cell_size
         self.timestep = timestep
 
         self.v_x = [[random.uniform(-1, 1) for _ in range(width + 1)] for _ in range(height)]
@@ -36,6 +30,11 @@ class Grid:
             self.solid_cells[y][0] = 1
             self.solid_cells[y][width-1] = 1
 
+        self.solid_cells[10][10] = 1
+        self.solid_cells[10][11] = 1
+        self.solid_cells[11][10] = 1
+        self.solid_cells[11][11] = 1
+
         for j in range(height+1):
             for i in range(width):
                 self.v_y[j][i] = 0.0
@@ -44,7 +43,7 @@ class Grid:
                 self.v_x[j][i] = 1.0
 
     def is_solid(self, x: int, y: int) -> int:
-        return self.solid_cells[clamp_i(0, y, self.height-1)][clamp_i(0, x, self.width-1)]
+        return self.solid_cells[clampi(0, y, self.height-1)][clampi(0, x, self.width-1)]
 
     def divergence(self, x: int, y: int) -> float:
         vt = self.v_y[y+0][x]
@@ -52,8 +51,8 @@ class Grid:
         vl = self.v_x[y][x+0]
         vr = self.v_x[y][x+1]
 
-        dx = (vr - vl) / float(Grid.CELL_SIZE)
-        dy = (vt - vb) / float(Grid.CELL_SIZE)
+        dx = (vr - vl) / float(self.cell_size)
+        dy = (vt - vb) / float(self.cell_size)
 
         return dy + dx
 
@@ -94,7 +93,7 @@ class Grid:
 
         p = pt + pb + pl + pr
         v = vt - vb + vr - vl
-        self.pressure[y][x] = (p - Grid.FLUID_DENSITY * Grid.CELL_SIZE * v / self.timestep) / flow_edges
+        self.pressure[y][x] = (p - Grid.FLUID_DENSITY * self.cell_size * v / self.timestep) / flow_edges
 
     def solve_pressure(self) -> None:
         for _ in range(10):
@@ -113,7 +112,7 @@ class Grid:
         return mx, mi
 
     def solve_velocity(self) -> None:
-        k = self.timestep / (Grid.FLUID_DENSITY * Grid.CELL_SIZE)
+        k = self.timestep / (Grid.FLUID_DENSITY * self.cell_size)
         for y in range(len(self.v_x)):
             for x in range(len(self.v_x[y])):
                 if self.is_solid(x, y) or self.is_solid(x-1, 0):
